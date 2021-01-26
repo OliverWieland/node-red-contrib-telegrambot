@@ -76,6 +76,8 @@ module.exports = function (RED) {
         // contains all the nodes that make use of the bot connection maintained by this configuration node.
         this.users = [];
 
+        this.userTable = {};
+
         this.status = "disconnected";
 
         // Reading configuration properties...
@@ -502,6 +504,15 @@ module.exports = function (RED) {
             self.commands.push(command);
         }
 
+        this.chatIdByUsername = function(username){
+            if (username in this.userTable) return this.userTable[username];
+            return null;
+        }
+
+        this.storeUser = function(chatid, username) {
+            this.userTable[username] = chatid;
+        }
+
     }
     RED.nodes.registerType("telegram bot", TelegramBotNode, {
         credentials: {
@@ -659,6 +670,8 @@ module.exports = function (RED) {
                         var msg = { payload: messageDetails, originalMessage: botMsg };
 
                         if (node.config.isAuthorized(node, chatid, username)) {
+                            // store the user in the lookup table
+                            node.config.storeUser(chatid, username);
                             // downloadable "blob" message?
                             if (messageDetails.blob) {
                                 var fileId = msg.payload.content;
@@ -1786,6 +1799,20 @@ module.exports = function (RED) {
             node.status({ fill: "green", shape: "ring", text: "connected" });
 
             if (msg.payload) {
+                if (msg.payload.userName) {
+                    if(!Array.isArray(msg.payload.userName)){
+                        msg.payload.chatId = node.config.chatIdByUsername(msg.payload.userName);
+                    } else{
+                        var userNames = msg.payload.userName;
+                        var length = userNames.length;
+                        var chatIds = [];
+                        for (var i = 0; i < length; i++) {
+                            chatIds.push(node.config.chatIdByUsername(msg.payload.userName));
+                        }
+                        msg.payload.chatId = chatIds;
+                    }
+
+                }
                 if (msg.payload.chatId) {
                     if(!Array.isArray(msg.payload.chatId)){
                         var chatId = msg.payload.chatId;
